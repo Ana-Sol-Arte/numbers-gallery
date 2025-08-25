@@ -1,5 +1,5 @@
 [
   { "slug": "001-hello", "title": "Hello Numbers ✨", "note": "Sample starter sketch" },
   { "slug": "002-zen-multilingual", "note": "Sample Multilingual" },
-    { "slug": "003-zen-particles", "title": "Zen Particles ✨", "note": Sample Particles" }
+    { "slug": "003-zen-particles", "title": "Zen Particles ✨", "note": "Sample Particles" }
 ]
