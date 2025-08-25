@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Viewer — Numbers Gallery</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* Fullscreen iframe */
+    .viewer-wrap { height: calc(100vh - 120px); }
+    iframe { width: 100%; height: 100%; border: 0; }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <a href="index.html" class="btn">&larr; Gallery</a>
+    <h1>Viewer</h1>
+  </header>
+
+  <main class="container viewer-wrap">
+    <iframe id="sketch-frame" title="p5 sketch"></iframe>
+  </main>
+
+  <footer class="bar small">
+    <p>Tip: you can pass <code>?num=123</code> in the URL.</p>
+  </footer>
+
+  <script>
+    // Read slug (required) + pass through any extra params (e.g., ?num=137)
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get('slug');
+    if (!slug) {
+      document.querySelector('.viewer-wrap').innerHTML =
+        '<p style="padding:1rem">Missing <code>?slug=folder-name</code> in URL.</p>';
+    } else {
+      // Keep extra query params (except slug) and forward to the sketch
+      const forward = new URLSearchParams();
+      for (const [k, v] of params.entries()) if (k !== 'slug') forward.set(k, v);
+      const q = forward.toString();
+      const src = `sketches/${encodeURIComponent(slug)}/${q ? ("?" + q) : ""}`;
+      document.getElementById('sketch-frame').src = src;
+    }
+  </script>
+</body>
+</html>
