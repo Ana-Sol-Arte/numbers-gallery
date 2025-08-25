@@ -1,7 +1,7 @@
 [
   { "slug": "001-hello", "title": "Hello Numbers ✨", "note": "Sample starter sketch" },
-  { "slug": "002-zen-multilingual", "note": "Sample Multilingual" },
-    { "slug": "003-zen-particles", "title": "Zen Particles ✨", "note": "Third sketch" },
-   { "slug": "004-zen-particles-snowfall", "title": "Zen Particles and Snowfall ✨", "note": "Fourth sketch" },
-  { "slug": "005-zen-particles-snow-water", "title": "Zen Particles Snow Water ✨", "note": "Fifth sketch" }
+  { "slug": "002-zen-multilingual", "title": "002 Zen Multilingual ✨","note": "Second sketch" },
+    { "slug": "003-zen-particles", "title": "003 Zen Particles ✨", "note": "Third sketch" },
+   { "slug": "004-zen-particles-snowfall", "title": "004 Zen Particles and Snowfall ✨", "note": "Fourth sketch" },
+  { "slug": "005-zen-particles-snow-water", "title": "005 Zen Particles Snow Water ✨", "note": "Fifth sketch" }
 ]
