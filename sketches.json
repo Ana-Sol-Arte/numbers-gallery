@@ -1,5 +1,6 @@
 [
   { "slug": "001-hello", "title": "Hello Numbers ✨", "note": "Sample starter sketch" },
   { "slug": "002-zen-multilingual", "note": "Sample Multilingual" },
-    { "slug": "003-zen-particles", "title": "Zen Particles ✨", "note": "Third sketch" }
+    { "slug": "003-zen-particles", "title": "Zen Particles ✨", "note": "Third sketch" },
+   { "slug": "004-zen-particles-snowfall", "title": "Zen Particles and Snowfall ✨", "note": "Fourth sketch" }
 ]
