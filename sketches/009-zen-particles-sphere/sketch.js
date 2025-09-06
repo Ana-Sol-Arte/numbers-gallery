@@ -29,8 +29,8 @@ const FG = 255;              // foreground: white
 
 // Text particle sampling/layout
 const SAMPLE_STEP = 6;       // pixel step (bigger = fewer particles, faster)
-const TARGET_SCALE = 0.78;   // fraction of min(width,height) for text height
-const MARGIN_FRAC = 0.12;    // canvas margin around text box
+const TARGET_SCALE = 0.55;   // fraction of min(width,height) for text height
+const MARGIN_FRAC = 0.20;    // canvas margin around text box
 
 // Motion tuning
 const EXHALE_SPREAD = 28;
