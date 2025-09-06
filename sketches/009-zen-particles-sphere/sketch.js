@@ -164,7 +164,7 @@ function draw() {
 function buildSphere() {
   // Sphere radius fits nicely behind the text and within margins
   const minDim = min(width, height);
-  sphereRadius = minDim * 0.3;
+  sphereRadius = minDim * 0.35;
 
   // Make ~SPHERE_POINTS_APPROX points on a unit sphere using Fibonacci spiral
   const N = SPHERE_POINTS_APPROX;
