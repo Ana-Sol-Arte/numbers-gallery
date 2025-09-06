@@ -1,7 +1,6 @@
-// ===== Numbers: Zen Digit Dissolve + Spinning Particle Sphere (organic flip) =====
-// - Foreground: your breathe/dissolve text particles.
-// - Background: faux-3D spinning particle sphere.
-// - Organic spin reversals: slows to a gentle stop, then accelerates the other way.
+// ===== Numbers: Zen Digit Dissolve + Spinning Particle Sphere (organic flip + size knobs) =====
+// - Foreground: breathe/dissolve text particles.
+// - Background: faux-3D particle sphere with eased direction flips.
 //
 // URL params:
 //   ?num=137
@@ -9,11 +8,12 @@
 //   ?breath=8
 //   ?sphere=1
 //   ?sdens=1800
-//   ?sspin=0.12         // radians/sec base speed
-//   ?salpha=120         // 0..255 dot alpha
-//   ?sradius=0.35       // sphere radius as fraction of min(width,height) (default 0.48)
-//   ?sflip=30           // flip every N seconds (0 disables flipping)
-//   ?sease=2            // seconds: easing window centered on each flip (default 2)
+//   ?sspin=0.12
+//   ?salpha=120
+//   ?sradius=0.35     // sphere radius as fraction of minDim (default 0.48)
+//   ?tscale=0.60      // text height as fraction of minDim (default 0.78)
+//   ?sflip=30         // flip every N seconds (0 disables)
+//   ?sease=2          // easing window (seconds) around each flip
 
 let DISPLAY_TEXT = "131";
 let RUN_SECONDS = null;
@@ -30,9 +30,9 @@ const BG = 0;
 const FG = 255;
 
 // Text particle sampling/layout
-const SAMPLE_STEP = 6;
-const TARGET_SCALE = 0.78;
+let TARGET_SCALE = 0.78;   // <— adjustable via ?tscale
 const MARGIN_FRAC = 0.12;
+const SAMPLE_STEP = 6;
 
 // Motion tuning
 const EXHALE_SPREAD = 28;
@@ -47,13 +47,13 @@ const HUD_FADE = 140;
 // ---- Sphere layer ----
 let SPHERE_ENABLED = true;
 let SPHERE_POINTS_APPROX = 1600;
-let SPHERE_SPIN = 0.10;          // base angular speed (rad/sec)
+let SPHERE_SPIN = 0.10;
 let SPHERE_BASE_ALPHA = 110;
-let SPHERE_RADIUS_FRAC = 0.48;
-let SPHERE_FLIP_SEC = 30;        // flip interval (0 disables)
-let SPHERE_EASE_SEC = 2;         // easing window duration (seconds)
+let SPHERE_RADIUS_FRAC = 0.48; // <— adjustable via ?sradius
+let SPHERE_FLIP_SEC = 30;      // 0 disables
+let SPHERE_EASE_SEC = 2;
 
-// Integrated angles (for perfectly smooth motion)
+// Integrated angles
 let spherePts = [];
 let sphereRadius = 200;
 let sphereAngleY = 0;
@@ -105,16 +105,22 @@ function getParams() {
     if (Number.isFinite(v) && v > 0 && v < 1.2) SPHERE_RADIUS_FRAC = v;
   }
 
+  const tscale = u.searchParams.get("tscale");
+  if (tscale !== null) {
+    const v = parseFloat(tscale);
+    if (Number.isFinite(v) && v > 0 && v < 1.5) TARGET_SCALE = v;
+  }
+
   const flip = u.searchParams.get("sflip");
   if (flip !== null) {
     const v = parseFloat(flip);
-    if (Number.isFinite(v) && v >= 0) SPHERE_FLIP_SEC = v; // 0 = disable flipping
+    if (Number.isFinite(v) && v >= 0) SPHERE_FLIP_SEC = v;
   }
 
   const ease = u.searchParams.get("sease");
   if (ease !== null) {
     const v = parseFloat(ease);
-    if (Number.isFinite(v) && v >= 0) SPHERE_EASE_SEC = v; // 0 = no easing
+    if (Number.isFinite(v) && v >= 0) SPHERE_EASE_SEC = v;
   }
 }
 
@@ -137,21 +143,19 @@ function windowResized() {
 function draw() {
   background(BG);
 
-  // Rebuild text particles on size/text change
-  const buildKey = DISPLAY_TEXT + "|" + width + "x" + height;
+  // Rebuild text particles on size/text change or tscale updates
+  const buildKey = DISPLAY_TEXT + "|" + width + "x" + height + "|" + TARGET_SCALE;
   if (buildKey !== lastBuildKey) buildTextParticles();
 
-  // --- 1) SPHERE LAYER (behind) ---
-  if (SPHERE_ENABLED) {
-    drawSphereLayer();
-  }
+  // 1) Sphere (behind)
+  if (SPHERE_ENABLED) drawSphereLayer();
 
-  // --- 2) DIGIT DISSOLVE LAYER (front) ---
+  // 2) Digit dissolve (front)
   const t = millis() / 1000.0;
   const period = BREATH_SECONDS * 2;
-  const phase = (t % period) / period;                 // 0..1
-  const tri = phase < 0.5 ? (phase * 2.0) : (2.0 - phase * 2.0); // 0..1..0
-  const exhale = 1.0 - tri;                            // 1 at most dissolved
+  const phase = (t % period) / period;
+  const tri = phase < 0.5 ? (phase * 2.0) : (2.0 - phase * 2.0);
+  const exhale = 1.0 - tri;
 
   noStroke();
   for (let p of particles) {
@@ -194,7 +198,7 @@ function buildSphere() {
 
   for (let i = 0; i < N; i++) {
     const t = i / (N - 1);
-    const z = 1 - 2 * t;             // 1..-1
+    const z = 1 - 2 * t; // 1..-1
     const r = Math.sqrt(max(0, 1 - z * z));
     const theta = ga * i;
     const x = r * Math.cos(theta);
@@ -206,15 +210,14 @@ function buildSphere() {
 function drawSphereLayer() {
   const t = millis() / 1000.0;
 
-  // Compute dt for integration (cap to avoid huge jumps on tab switch)
+  // dt for stable integration
   if (lastTimeSec === null) lastTimeSec = t;
   const dt = constrain(t - lastTimeSec, 0, 0.1);
   lastTimeSec = t;
 
-  // Determine spin direction and easing factor
+  // Direction + easing (organic flip)
   let dir = 1;
   let ease = 1;
-
   if (SPHERE_FLIP_SEC > 0) {
     const cycles = floor(t / SPHERE_FLIP_SEC);
     dir = (cycles % 2 === 0 ? 1 : -1);
@@ -222,19 +225,14 @@ function drawSphereLayer() {
     if (SPHERE_EASE_SEC > 0) {
       const mod = t % SPHERE_FLIP_SEC;
       const half = SPHERE_EASE_SEC / 2;
-      const dist = Math.min(mod, SPHERE_FLIP_SEC - mod); // time from nearest flip boundary
-
+      const dist = Math.min(mod, SPHERE_FLIP_SEC - mod);
       if (dist < half) {
-        // Raised-cosine from 0 → 1 across the window edge
         const r = dist / half;                  // 0..1
-        ease = 0.5 * (1 - Math.cos(Math.PI * r)); // 0 at boundary → 1 at edge
-      } else {
-        ease = 1;
+        ease = 0.5 * (1 - Math.cos(Math.PI * r)); // raised-cosine 0→1
       }
     }
   }
 
-  // Integrate angles with eased angular velocity
   const omegaY = dir * SPHERE_SPIN * ease;
   const omegaX = dir * (SPHERE_SPIN * 0.33) * ease;
 
@@ -249,7 +247,6 @@ function drawSphereLayer() {
   const R = sphereRadius;
   const persp = 0.85;
 
-  // Depth-sort so far points draw first
   let tmp = [];
   for (let p of spherePts) {
     // Rotate (Y then X)
@@ -258,7 +255,6 @@ function drawSphereLayer() {
     let y =  p.y * cosX - z   * sinX;
         z =  p.y * sinX + z   * cosX;
 
-    // Simple perspective
     const s = 1 + persp * z;
     const px = cx + x * R * s;
     const py = cy + y * R * s;
@@ -345,7 +341,7 @@ function buildTextParticles() {
     }
   }
 
-  lastBuildKey = DISPLAY_TEXT + "|" + width + "x" + height;
+  lastBuildKey = DISPLAY_TEXT + "|" + width + "x" + height + "|" + TARGET_SCALE;
 }
 
 function makeParticle(x, y) {
