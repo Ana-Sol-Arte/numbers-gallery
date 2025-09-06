@@ -30,7 +30,7 @@ const BG = 0;
 const FG = 255;
 
 // Text particle sampling/layout
-let TARGET_SCALE = 0.78;   // <— adjustable via ?tscale
+let TARGET_SCALE = 0.50;   // <— adjustable via ?tscale
 const MARGIN_FRAC = 0.12;
 const SAMPLE_STEP = 6;
 
@@ -49,7 +49,7 @@ let SPHERE_ENABLED = true;
 let SPHERE_POINTS_APPROX = 1600;
 let SPHERE_SPIN = 0.10;
 let SPHERE_BASE_ALPHA = 110;
-let SPHERE_RADIUS_FRAC = 0.48; // <— adjustable via ?sradius
+let SPHERE_RADIUS_FRAC = 0.34; // <— adjustable via ?sradius
 let SPHERE_FLIP_SEC = 30;      // 0 disables
 let SPHERE_EASE_SEC = 2;
 
