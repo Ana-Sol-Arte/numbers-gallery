@@ -1,36 +1,36 @@
-// ===== Numbers: Zen Digit Dissolve + Spinning Particle Sphere (p5.js single-file) =====
-// - Monochrome. The displayed number comes from ?num=... (default "131").
-// - Your existing breathe/dissolve text-particle effect remains unchanged.
-// - NEW: a faux-3D, slowly spinning particle sphere rendered BEHIND the number.
-//        Uses 2D canvas (no WEBGL), uniform points, simple perspective, depth-based alpha.
+// ===== Numbers: Zen Digit Dissolve + Spinning Particle Sphere (one-direction spin) =====
+// - Foreground: breathe/dissolve text particles.
+// - Background: faux-3D particle sphere spinning in ONE direction (no flips/easing).
 //
 // URL params:
-//   ?num=137         -> number/string to display
-//   ?dur=600         -> run time in seconds (shows tiny countdown HUD); omit to run indefinitely
-//   ?breath=8        -> seconds for one inhale OR one exhale (default 8)
-//   ?sphere=1        -> enable sphere (default 1)
-//   ?sdens=1800      -> approximate number of sphere dots (default 1600)
-//   ?sspin=0.12      -> sphere spin speed (radians/sec; default 0.1)
-//   ?salpha=120      -> base alpha 0..255 for sphere dots (default 110)
+//   ?num=137          -> number/string to display
+//   ?dur=600          -> run time in seconds (shows countdown); omit to run indefinitely
+//   ?breath=8         -> seconds for inhale/exhale (default 8)
+//   ?sphere=1         -> enable sphere (default 1)
+//   ?sdens=1800       -> approx number of sphere dots (default 1600)
+//   ?sspin=0.10       -> sphere spin speed in radians/sec (default 0.10)
+//   ?salpha=110       -> base alpha 0..255 for sphere dots (default 110)
+//   ?sradius=0.35     -> sphere radius as fraction of min(width,height) (default 0.48)
+//   ?tscale=0.60      -> TEXT size as fraction of min(width,height) (default 0.78)
 
 let DISPLAY_TEXT = "131";
-let RUN_SECONDS = null;      // null = run indefinitely
+let RUN_SECONDS = null;
 let BREATH_SECONDS = 8;
 
-// ---- Text-particle fields (unchanged core) ----
-let pg;                      // offscreen buffer to rasterize text
+// ---- Text-particle fields ----
+let pg;
 let particles = [];
 let lastBuildKey = "";
 let startMillis = 0;
 
 // Colors
-const BG = 0;                // background: black
-const FG = 255;              // foreground: white
+const BG = 0;
+const FG = 255;
 
 // Text particle sampling/layout
-const SAMPLE_STEP = 6;       // pixel step (bigger = fewer particles, faster)
-const TARGET_SCALE = 0.55;   // fraction of min(width,height) for text height
-const MARGIN_FRAC = 0.20;    // canvas margin around text box
+let TARGET_SCALE = 0.78;     // <— now adjustable via ?tscale
+const MARGIN_FRAC = 0.12;    // margin around text box
+const SAMPLE_STEP = 6;       // pixel step (larger = fewer particles, faster)
 
 // Motion tuning
 const EXHALE_SPREAD = 28;
@@ -42,14 +42,19 @@ const DRIFT_NOISE_STRENGTH = 0.9;
 // HUD
 const HUD_FADE = 140;
 
-// ---- Sphere layer (new) ----
+// ---- Sphere layer ----
 let SPHERE_ENABLED = true;
-let SPHERE_POINTS_APPROX = 1600;   // ~number of dots
-let SPHERE_SPIN = 0.10;            // radians/sec
-let SPHERE_BASE_ALPHA = 110;       // dot alpha (0..255)
+let SPHERE_POINTS_APPROX = 1600;
+let SPHERE_SPIN = 0.10;          // one-direction angular speed (rad/sec)
+let SPHERE_BASE_ALPHA = 110;
+let SPHERE_RADIUS_FRAC = 0.48;   // <— now adjustable via ?sradius
 
-let spherePts = [];                // original unit-sphere points
-let sphereRadius = 200;            // pixels; computed from canvas
+// Sphere state
+let spherePts = [];
+let sphereRadius = 200;
+let sphereAngleY = 0;
+let sphereAngleX = 0;
+let lastTimeSec = null;
 
 function getParams() {
   const u = new URL(window.location.href);
@@ -89,12 +94,24 @@ function getParams() {
     const v = parseInt(salpha, 10);
     if (Number.isFinite(v) && v >= 0 && v <= 255) SPHERE_BASE_ALPHA = v;
   }
+
+  const srad = u.searchParams.get("sradius");
+  if (srad !== null) {
+    const v = parseFloat(srad);
+    if (Number.isFinite(v) && v > 0 && v < 1.2) SPHERE_RADIUS_FRAC = v;
+  }
+
+  const tscale = u.searchParams.get("tscale");
+  if (tscale !== null) {
+    const v = parseFloat(tscale);
+    if (Number.isFinite(v) && v > 0 && v < 1.5) TARGET_SCALE = v;
+  }
 }
 
 function setup() {
   getParams();
   createCanvas(windowWidth, windowHeight);
-  pixelDensity(1); // predictable sampling
+  pixelDensity(1);
   startMillis = millis();
 
   buildTextParticles();
@@ -111,16 +128,13 @@ function draw() {
   background(BG);
 
   // Rebuild text particles on size/text change
-  const buildKey = DISPLAY_TEXT + "|" + width + "x" + height;
+  const buildKey = DISPLAY_TEXT + "|" + width + "x" + height + "|" + TARGET_SCALE;
   if (buildKey !== lastBuildKey) buildTextParticles();
 
   // --- 1) SPHERE LAYER (behind) ---
-  if (SPHERE_ENABLED) {
-    drawSphereLayer();
-  }
+  if (SPHERE_ENABLED) drawSphereLayer();
 
   // --- 2) DIGIT DISSOLVE LAYER (front) ---
-  // Triangle-wave breath: tri goes 0..1..0 over a full inhale+exhale
   const t = millis() / 1000.0;
   const period = BREATH_SECONDS * 2;
   const phase = (t % period) / period;                 // 0..1
@@ -129,25 +143,20 @@ function draw() {
 
   noStroke();
   for (let p of particles) {
-    // Outward drift direction seeded by per-particle theta and noise
     const n = noise(p.home.x * DRIFT_NOISE_SCALE, p.home.y * DRIFT_NOISE_SCALE, t * 0.15);
     const ang = p.theta + n * TWO_PI;
     const spread = EXHALE_SPREAD * (0.4 + EXHALE_JITTER * p.rand);
     const drift = createVector(cos(ang), sin(ang)).mult(spread * exhale);
 
-    // Flow field push during exhale
     const f = flowForce(p.home.x, p.home.y, t).mult(DRIFT_NOISE_STRENGTH * exhale);
     drift.add(f);
 
-    // Target = home + drift
     const target = p5.Vector.add(p.home, drift);
 
-    // Ease toward target (looser on exhale, tighter on inhale)
     const easing = lerp(1.0 - INHALE_TIGHTNESS, 0.08, exhale);
     p.pos.x = lerp(p.pos.x, target.x, easing);
     p.pos.y = lerp(p.pos.y, target.y, easing);
 
-    // Slightly brighter when formed
     const alpha = 200 + 55 * tri;
     fill(FG, alpha);
     circle(p.pos.x, p.pos.y, p.size);
@@ -162,19 +171,18 @@ function draw() {
 // ---------------- Sphere layer ----------------
 
 function buildSphere() {
-  // Sphere radius fits nicely behind the text and within margins
   const minDim = min(width, height);
-  sphereRadius = minDim * 0.35;
+  sphereRadius = minDim * SPHERE_RADIUS_FRAC;
 
-  // Make ~SPHERE_POINTS_APPROX points on a unit sphere using Fibonacci spiral
+  // Fibonacci sphere
   const N = SPHERE_POINTS_APPROX;
   spherePts = [];
-  const phi = (1 + Math.sqrt(5)) / 2;    // golden ratio
-  const ga = 2 * Math.PI * (1 - 1 / phi);// golden angle
+  const phi = (1 + Math.sqrt(5)) / 2;
+  const ga = 2 * Math.PI * (1 - 1 / phi);
 
   for (let i = 0; i < N; i++) {
-    const t = i / (N - 1);               // 0..1
-    const z = 1 - 2 * t;                  // 1..-1
+    const t = i / (N - 1);
+    const z = 1 - 2 * t;             // 1..-1
     const r = Math.sqrt(max(0, 1 - z * z));
     const theta = ga * i;
     const x = r * Math.cos(theta);
@@ -186,21 +194,27 @@ function buildSphere() {
 function drawSphereLayer() {
   const t = millis() / 1000.0;
 
-  // Slow rotation around Y plus a hint of X for parallax
-  const aY = t * SPHERE_SPIN;
-  const aX = t * (SPHERE_SPIN * 0.33);
+  // dt for stable integration
+  if (lastTimeSec === null) lastTimeSec = t;
+  const dt = constrain(t - lastTimeSec, 0, 0.1);
+  lastTimeSec = t;
 
-  const sinY = Math.sin(aY), cosY = Math.cos(aY);
-  const sinX = Math.sin(aX), cosX = Math.cos(aX);
+  // One-direction rotation
+  const omegaY = SPHERE_SPIN;
+  const omegaX = SPHERE_SPIN * 0.33;
 
-  // Perspective-ish projection params
+  sphereAngleY += omegaY * dt;
+  sphereAngleX += omegaX * dt;
+
+  const sinY = Math.sin(sphereAngleY), cosY = Math.cos(sphereAngleY);
+  const sinX = Math.sin(sphereAngleX), cosX = Math.cos(sphereAngleX);
+
   const cx = width / 2;
   const cy = height / 2;
   const R = sphereRadius;
-  const persp = 0.85; // how much closer points appear when z→1
+  const persp = 0.85;
 
-  // Sort by depth so far points draw first (subtle but nice)
-  // Compute once per frame into a temp array
+  // Depth-sort so far points draw first
   let tmp = [];
   for (let p of spherePts) {
     // Rotate (Y then X)
@@ -209,14 +223,12 @@ function drawSphereLayer() {
     let y =  p.y * cosX - z   * sinX;
         z =  p.y * sinX + z   * cosX;
 
-    // Simple perspective scale (larger when closer)
-    const s = 1 + persp * z; // z in [-1,1] → scale in [1-persp, 1+persp]
+    const s = 1 + persp * z;          // simple perspective
     const px = cx + x * R * s;
     const py = cy + y * R * s;
 
-    // Depth-based alpha and size (front side brighter/larger)
     const a = constrain(SPHERE_BASE_ALPHA * (0.6 + 0.6 * (z + 1) * 0.5), 10, 255);
-    const size = 1.3 + 1.7 * (z + 1) * 0.5; // 1.3..3.0
+    const size = 1.3 + 1.7 * (z + 1) * 0.5;
 
     tmp.push({ px, py, z, a, size });
   }
@@ -255,12 +267,10 @@ function drawCountdown(remainingSec) {
 }
 
 function buildTextParticles() {
-  // Layout: fit text height to TARGET_SCALE of min dimension, respecting margins.
   const minDim = min(width, height);
   const margin = minDim * MARGIN_FRAC;
   const targetH = minDim * TARGET_SCALE;
 
-  // Create offscreen buffer and draw centered white text on black
   pg = createGraphics(width, height);
   pg.pixelDensity(1);
   pg.background(0);
@@ -268,11 +278,10 @@ function buildTextParticles() {
   pg.noStroke();
   pg.textAlign(CENTER, CENTER);
 
-  // Start with height target
   let ts = max(12, targetH);
   pg.textSize(ts);
 
-  // If too wide for available width, shrink proportionally
+  // Fit to width if needed
   const availW = width - margin * 2;
   let wText = pg.textWidth(DISPLAY_TEXT);
   if (wText > availW) {
@@ -281,16 +290,15 @@ function buildTextParticles() {
     pg.textSize(ts);
   }
 
-  // Draw the text centered
+  // Draw centered
   pg.text(DISPLAY_TEXT, width / 2, height / 2);
 
-  // Sample entire buffer (simple + robust)
+  // Sample pixels → particles
   pg.loadPixels();
   particles = [];
   const pw = pg.width;
   const ph = pg.height;
 
-  // Threshold for white pixels
   for (let y = 0; y < ph; y += SAMPLE_STEP) {
     for (let x = 0; x < pw; x += SAMPLE_STEP) {
       const idx = 4 * (y * pw + x);
@@ -304,7 +312,7 @@ function buildTextParticles() {
     }
   }
 
-  lastBuildKey = DISPLAY_TEXT + "|" + width + "x" + height;
+  lastBuildKey = DISPLAY_TEXT + "|" + width + "x" + height + "|" + TARGET_SCALE;
 }
 
 function makeParticle(x, y) {
@@ -318,7 +326,6 @@ function makeParticle(x, y) {
   };
 }
 
-// Quick test: press 'r' to swap in a random number
 function keyTyped() {
   if (key === 'r') {
     DISPLAY_TEXT = String(floor(random(1, 9999)));
