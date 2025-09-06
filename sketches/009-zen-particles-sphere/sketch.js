@@ -28,7 +28,7 @@ const BG = 0;
 const FG = 255;
 
 // Text particle sampling/layout
-let TARGET_SCALE = 0.78;     // <— now adjustable via ?tscale
+let TARGET_SCALE = 0.50;     // <— now adjustable via ?tscale
 const MARGIN_FRAC = 0.12;    // margin around text box
 const SAMPLE_STEP = 6;       // pixel step (larger = fewer particles, faster)
 
@@ -47,7 +47,7 @@ let SPHERE_ENABLED = true;
 let SPHERE_POINTS_APPROX = 1600;
 let SPHERE_SPIN = 0.10;          // one-direction angular speed (rad/sec)
 let SPHERE_BASE_ALPHA = 110;
-let SPHERE_RADIUS_FRAC = 0.48;   // <— now adjustable via ?sradius
+let SPHERE_RADIUS_FRAC = 0.34;   // <— now adjustable via ?sradius
 
 // Sphere state
 let spherePts = [];
